@@ -1,0 +1,12 @@
+alias: Play Radio2
+description: "Play Dutch Radio2 streaming radio on Google nest media player"
+trigger: []
+condition: []
+action:
+  - service: media_player.play_media
+    target:
+      entity_id: media_player.keuken
+    data:
+      media_content_id: https://icecast.omroep.nl/radio2-bb-aac
+      media_content_type: music
+mode: single
