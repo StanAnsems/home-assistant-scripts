@@ -1,0 +1,53 @@
+alias: Doorbel
+description: "Trigger MP3 sound on Google nest home on Ring doorbell motion. Re-activate radio playing after doorbell ring, when it was playing"
+trigger:
+  - entity_id:
+      - binary_sensor.voordeur_motion
+    platform: state
+  - platform: state
+    entity_id:
+      - binary_sensor.voordeur_ding
+condition: []
+action:
+  - service: media_player.play_media
+    target:
+      entity_id: media_player.keuken
+    data:
+      media_content_id: >-
+        media-source://media_source/local/ding-dong-bell-doorbell.mp3
+      media_content_type: audio/mpeg
+    metadata:
+      title: ding-dong-bell-doorbell.mp3
+      thumbnail: null
+      media_class: music
+      children_media_class: null
+      navigateIds:
+        - {}
+        - media_content_type: app
+          media_content_id: media-source://media_source
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.keuken
+      volume_level: 0.5
+  - delay: 3
+  - service: media_player.volume_set
+    data:
+      entity_id: media_player.keuken
+      volume_level: "{{ mediaplayer_volume_level }}"
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ mediaplayer_Playing }}"
+        sequence:
+          - service: media_player.play_media
+            target:
+              entity_id: media_player.keuken
+            data:
+              media_content_id: "{{ mediaplayer_media_content_id }}"
+              media_content_type: music
+variables:
+  mediaplayer_media_content_id: "{{ state_attr('media_player.keuken','media_content_id') }}"
+  mediaplayer_Source: "{{ state_attr('media_player.keuken','media_channel') }}"
+  mediaplayer_Playing: "{{ is_state('media_player.keuken', 'playing') }}"
+  mediaplayer_volume_level: 0.3
+mode: single
