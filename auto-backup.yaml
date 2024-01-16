@@ -1,0 +1,11 @@
+alias: Backup Home Assistant every night at 3 AM
+description: ""
+trigger:
+  - platform: time
+    at: "03:00:00"
+action:
+  - alias: Create backup now
+    service: hassio.backup_full
+    data:
+      compressed: true
+      location: Synology
