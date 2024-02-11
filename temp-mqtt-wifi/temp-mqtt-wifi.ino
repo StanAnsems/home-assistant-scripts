@@ -99,7 +99,10 @@ void loop() {
 
   // Every X number of seconds (interval = 10 seconds)
   // it publishes a new MQTT message
-  if (!hasPublished && currentMillis - previousMillis >= interval) {
+  if (!hasPublished && currentMillis - previousMillis >= interval) 
+    // Save the last time a new reading was published
+    previousMillis = currentMillis;{
+	  
     if (!WiFi.isConnected()) {
       Serial.printf("Wifi is not connected \n");
       return;
@@ -109,8 +112,6 @@ void loop() {
       Serial.printf("MQTT not connected \n");
       return;
     }
-    // Save the last time a new reading was published
-    previousMillis = currentMillis;
     // New DHT sensor readings
     hum = dht.readHumidity();
     // Read temperature as Celsius (the default)
