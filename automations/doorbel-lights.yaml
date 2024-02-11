@@ -1,0 +1,34 @@
+alias: Movement Lights
+description: ""
+trigger:
+  - entity_id:
+      - binary_sensor.deurbel_motion_detected
+    platform: state
+  - platform: state
+    entity_id:
+      - binary_sensor.deurbel_motion_detected
+condition: []
+action:
+  - alias: repeat
+    repeat:
+      count: 3
+      sequence:
+        - service: switch.turn_on
+          metadata: {}
+          data: {}
+          target:
+            entity_id: switch.keuken_switch_0
+        - delay:
+            milliseconds: 200
+        - service: switch.turn_off
+          metadata: {}
+          data: {}
+          target:
+            entity_id: switch.keuken_switch_0
+        - delay:
+            milliseconds: 200
+  - service_template: switch.turn_{{keuken_lamp}}
+    entity_id: switch.keuken_switch_0
+mode: single
+variables:
+  keuken_lamp: "{{ states('switch.keuken_switch_0') }}"
