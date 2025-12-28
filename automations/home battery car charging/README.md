@@ -18,7 +18,7 @@ Requirements:
 - after 20:00 (lower rates) charge the car
 
 Automations:
-- [Car charge turn off](car-battery-turn-off.yaml)
+- [Car charge turn off](car-charge-turn-off.yaml)
 - [Car charge solar over production](car-charge-solar-over-production.yml)
 - [Car charge after 20:00](car-charge-after-eight.yml)
 - [Car charge low battery](car-battery-low.yml)
