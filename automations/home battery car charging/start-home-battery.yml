@@ -1,4 +1,4 @@
-alias: Auto laden stop - Batterij Auto mode
+alias: Car charging stopped - start home battery
 description: ""
 triggers:
   - trigger: state

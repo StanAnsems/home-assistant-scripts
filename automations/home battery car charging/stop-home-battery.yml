@@ -1,4 +1,4 @@
-alias: Auto laden - Batterij niet ontladen
+alias: Car charge - stop discharge home battery
 description: ""
 triggers:
   - trigger: state
