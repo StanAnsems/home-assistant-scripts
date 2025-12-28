@@ -1,0 +1,18 @@
+alias: Auto laden - Batterij niet ontladen
+description: ""
+triggers:
+  - trigger: state
+    entity_id:
+      - sensor.wallbox_portal_status_description
+    from: null
+    to:
+      - Charging
+conditions: []
+actions:
+  - action: select.select_option
+    metadata: {}
+    data:
+      option: "off"
+    target:
+      entity_id: select.zendure_manager_operation
+mode: single

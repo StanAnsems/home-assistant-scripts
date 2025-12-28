@@ -1,0 +1,53 @@
+alias: Turn off wallbox
+description: ""
+triggers:
+  - trigger: time
+    at: "07:00:00"
+  - trigger: numeric_state
+    entity_id:
+      - sensor.envoy_122317102934_current_power_production
+    below: 500
+  - trigger: state
+    entity_id:
+      - switch.wallbox_portal_pause_resume
+    to:
+      - "on"
+  - trigger: numeric_state
+    entity_id:
+      - sensor.kona_ev_battery_level
+    above: 40
+  - trigger: state
+    entity_id:
+      - sensor.wallbox_portal_status_description
+    to:
+      - Charging
+conditions:
+  - condition: numeric_state
+    entity_id: sensor.kona_ev_battery_level
+    above: 40
+  - condition: numeric_state
+    entity_id: sensor.envoy_122317102934_current_power_production
+    below: 1500
+  - condition: numeric_state
+    entity_id: sensor.solarflow_2400_ac_electric_level
+    below: 98
+  - condition: time
+    before: "20:00:00"
+    after: "07:00:00"
+  - condition: state
+    entity_id: sensor.wallbox_portal_status_description
+    state:
+      - Charging
+actions:
+  - action: number.set_value
+    metadata: {}
+    data:
+      value: "32"
+    target:
+      entity_id: number.wallbox_portal_max_charging_current
+  - action: switch.turn_off
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.wallbox_portal_pause_resume
+mode: single

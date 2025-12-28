@@ -1,0 +1,25 @@
+alias: Turn on Wallbox when battery is low (car battery low)
+description: ""
+triggers:
+  - trigger: numeric_state
+    entity_id:
+      - sensor.kona_ev_battery_level
+    below: 50
+conditions:
+  - condition: state
+    entity_id: sensor.wallbox_portal_status_description
+    state:
+      - Paused
+actions:
+  - action: number.set_value
+    metadata: {}
+    data:
+      value: "32"
+    target:
+      entity_id: number.wallbox_portal_max_charging_current
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.wallbox_portal_pause_resume
+mode: single

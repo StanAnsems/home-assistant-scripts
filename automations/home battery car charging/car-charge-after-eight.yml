@@ -1,0 +1,23 @@
+alias: Turn on Wallbox after 20:00
+description: ""
+triggers:
+  - trigger: time
+    at: "20:00:00"
+conditions:
+  - condition: state
+    entity_id: sensor.wallbox_portal_status_description
+    state:
+      - Paused
+actions:
+  - action: number.set_value
+    metadata: {}
+    data:
+      value: "32"
+    target:
+      entity_id: number.wallbox_portal_max_charging_current
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.wallbox_portal_pause_resume
+mode: single

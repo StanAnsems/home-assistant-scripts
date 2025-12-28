@@ -1,0 +1,18 @@
+alias: Auto laden stop - Batterij Auto mode
+description: ""
+triggers:
+  - trigger: state
+    entity_id:
+      - sensor.wallbox_portal_status_description
+    from:
+      - Charging
+    to: null
+conditions: []
+actions:
+  - action: select.select_option
+    metadata: {}
+    data:
+      option: smart
+    target:
+      entity_id: select.zendure_manager_operation
+mode: single

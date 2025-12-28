@@ -1,0 +1,27 @@
+alias: Turn on Wallbox when solar production is over 1500W
+description: ""
+triggers:
+  - entity_id:
+      - sensor.envoy_122317102934_current_power_production
+    above: 1500
+    trigger: numeric_state
+conditions:
+  - condition: numeric_state
+    entity_id: sensor.solarflow_2400_ac_electric_level
+    above: 98
+  - condition: state
+    entity_id: sensor.wallbox_portal_status_description
+    state:
+      - Paused
+actions:
+  - device_id: 694aa0a33a5478880beb7718e322ff02
+    domain: number
+    entity_id: e7e95b9dd5c9525ecc1266ce2bd61a52
+    type: set_value
+    value: 6
+  - action: switch.turn_on
+    metadata: {}
+    data: {}
+    target:
+      entity_id: switch.wallbox_portal_pause_resume
+mode: single
