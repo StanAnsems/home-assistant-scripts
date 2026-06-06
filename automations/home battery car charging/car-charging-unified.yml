@@ -1,0 +1,234 @@
+alias: Auto laden - gecombineerd
+description: >-
+  Beheert laadpaal en thuisbatterij: zonne-energie laadt eerst de auto
+  (daarna thuisbatterij). Start ook bij lage EV-accu (<40%). Stopt wanneer
+  EV >50% en zonne-energie laag is.
+triggers:
+  - trigger: numeric_state
+    id: solar_hoog
+    entity_id: sensor.envoy_122317102934_current_power_production
+    above: 1500
+  - trigger: numeric_state
+    id: solar_laag
+    entity_id: sensor.envoy_122317102934_current_power_production
+    below: 1000
+  - trigger: numeric_state
+    id: auto_accu_laag
+    entity_id: sensor.kona_ev_battery_level
+    below: 40
+  - trigger: numeric_state
+    id: dagreis_modus
+    entity_id: number.kona_ac_charging_limit
+    above: 99
+  - trigger: numeric_state
+    id: ev_accu_half_vol
+    entity_id: sensor.kona_ev_battery_level
+    above: 50
+  - trigger: state
+    id: auto_aangesloten
+    entity_id: sensor.wallbox_portal_status_description
+    to: Paused
+  - trigger: state
+    id: auto_begint_laden
+    entity_id: sensor.wallbox_portal_status_description
+    to: Charging
+  - trigger: state
+    id: auto_stopt_laden
+    entity_id: sensor.wallbox_portal_status_description
+    from: Charging
+conditions: []
+actions:
+  - choose:
+      # Auto begint laden → thuisbatterij niet ontladen
+      - conditions:
+          - condition: trigger
+            id: auto_begint_laden
+        sequence:
+          - action: select.select_option
+            data:
+              option: "off"
+            target:
+              entity_id: select.zendure_manager_operation
+
+      # Auto stopt laden → thuisbatterij terug naar slim laden
+      - conditions:
+          - condition: trigger
+            id: auto_stopt_laden
+        sequence:
+          - action: select.select_option
+            data:
+              option: smart
+            target:
+              entity_id: select.zendure_manager_operation
+
+      # Dagreis modus (laadlimiet → 100%) + auto aan het laden → verhoog naar vol vermogen
+      - conditions:
+          - condition: trigger
+            id: dagreis_modus
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+
+      # Dagreis modus (laadlimiet → 100%) + auto aangesloten maar gepauseerd → start op vol vermogen
+      - conditions:
+          - condition: trigger
+            id: dagreis_modus
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Paused
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Auto aangesloten + EV-accu laag (<40%) → laden op vol vermogen
+      - conditions:
+          - condition: trigger
+            id: auto_aangesloten
+          - condition: numeric_state
+            entity_id: sensor.kona_ev_battery_level
+            below: 40
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Auto aangesloten + laadlimiet 100% (dagreis) → altijd laden op vol vermogen
+      - conditions:
+          - condition: trigger
+            id: auto_aangesloten
+          - condition: numeric_state
+            entity_id: number.kona_ac_charging_limit
+            above: 99
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Auto aangesloten + zonne-energie hoog → laden op minimum stroom
+      - conditions:
+          - condition: trigger
+            id: auto_aangesloten
+          - condition: numeric_state
+            entity_id: sensor.envoy_122317102934_current_power_production
+            above: 1500
+        sequence:
+          - action: number.set_value
+            data:
+              value: "6"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Zonne-energie hoog → auto laden (32A bij dagreis/laadlimiet 100%, anders 6A)
+      - conditions:
+          - condition: trigger
+            id: solar_hoog
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Paused
+        sequence:
+          - action: number.set_value
+            data:
+              value: >-
+                {{ 32 if states('number.kona_ac_charging_limit') | int == 100 else 6 }}
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Auto-accu laag (<40%) → laden op vol vermogen
+      - conditions:
+          - condition: trigger
+            id: auto_accu_laag
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Paused
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_on
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # Zonne-energie laag + EV >50% + geen dagreis → laden pauzeren
+      - conditions:
+          - condition: trigger
+            id: solar_laag
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+          - condition: numeric_state
+            entity_id: sensor.kona_ev_battery_level
+            above: 50
+          - condition: numeric_state
+            entity_id: number.kona_ac_charging_limit
+            below: 100
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_off
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+
+      # EV >50% + zonne-energie al laag + geen dagreis → laden pauzeren
+      - conditions:
+          - condition: trigger
+            id: ev_accu_half_vol
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+          - condition: numeric_state
+            entity_id: sensor.envoy_122317102934_current_power_production
+            below: 1000
+          - condition: numeric_state
+            entity_id: number.kona_ac_charging_limit
+            below: 100
+        sequence:
+          - action: number.set_value
+            data:
+              value: "32"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+          - action: switch.turn_off
+            data: {}
+            target:
+              entity_id: switch.wallbox_portal_pause_resume
+mode: queued

@@ -1,8 +1,12 @@
-alias: Turn on Wallbox after 20:00
+alias: Laad paal inschakelen (na 20:00)
 description: ""
 triggers:
   - trigger: time
     at: "20:00:00"
+  - trigger: time
+    at: "20:05:00"
+  - trigger: time
+    at: "23:00:00"
 conditions:
   - condition: state
     entity_id: sensor.wallbox_portal_status_description

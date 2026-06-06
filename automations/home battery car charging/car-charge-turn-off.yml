@@ -1,4 +1,4 @@
-alias: Turn off wallbox
+alias: Laad paal uitschakelen
 description: ""
 triggers:
   - trigger: time
@@ -6,7 +6,7 @@ triggers:
   - trigger: numeric_state
     entity_id:
       - sensor.envoy_122317102934_current_power_production
-    below: 500
+    below: 1000
   - trigger: state
     entity_id:
       - switch.wallbox_portal_pause_resume
@@ -28,9 +28,6 @@ conditions:
   - condition: numeric_state
     entity_id: sensor.envoy_122317102934_current_power_production
     below: 1500
-  - condition: numeric_state
-    entity_id: sensor.solarflow_2400_ac_electric_level
-    below: 98
   - condition: time
     before: "20:00:00"
     after: "07:00:00"

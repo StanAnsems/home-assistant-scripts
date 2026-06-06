@@ -1,0 +1,35 @@
+alias: Kia update forceren bij aansluiten en laden
+description: >-
+  Forceert een data-update van de Kia UVO integratie: eenmalig bij aansluiten
+  en elke 30 minuten tijdens actief laden als de data verouderd is (>25 min).
+  Alleen buiten het no-refresh venster (21:00-06:00).
+triggers:
+  - trigger: state
+    id: auto_aangesloten
+    entity_id: sensor.wallbox_portal_status_description
+    to: Paused
+  - trigger: time_pattern
+    id: elke_halfuur
+    minutes: "/30"
+conditions:
+  - condition: time
+    after: "06:00:00"
+    before: "21:00:00"
+  - condition: or
+    conditions:
+      - condition: trigger
+        id: auto_aangesloten
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: elke_halfuur
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+          - condition: template
+            value_template: >-
+              {{ (now() - states('sensor.kona_last_updated_at') | as_datetime).total_seconds() > 1500 }}
+actions:
+  - action: kia_uvo.force_update
+    data: {}
+mode: single

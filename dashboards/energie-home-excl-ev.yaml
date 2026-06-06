@@ -1,0 +1,180 @@
+# Energie Dashboard - Home Verbruik Excl. Auto
+#
+# SETUP:
+# Add these cards to your existing Energy dashboard, or to a Masonry-layout view.
+# The energy-date-selection card controls the period shown by energy-flow-card-plus.
+#
+# The energy-flow-card-plus and statistics-graph cards can also be added to
+# any regular dashboard view without the date picker.
+
+cards:
+
+  # ── Date picker ────────────────────────────────────────────────────────────
+  # Renamed in recent HA versions from energy-date-picker to energy-date-selection.
+  - type: energy-date-selection
+
+  # ── Energy flow card ────────────────────────────────────────────────────────
+  # sensor.wallbox_portal_added_energy (Laadpaal) is already registered as an
+  # individual device in your energy config, so "home" automatically excludes it.
+  #
+  # Fix applied: individual1/individual2 → individual (array, current API)
+  - type: custom:energy-flow-card-plus
+    title: "Energiestroom (excl. auto)"
+    entities:
+      grid:
+        entity:
+          production: sensor.electricity_meter_energieproductie_sum
+          consumption: sensor.electricity_meter_energieverbruik_sum
+      solar:
+        entity: sensor.envoy_122317102934_lifetime_energy_production
+        display_zero_state: true
+        invert_state: false
+      battery:
+        entity:
+          production: sensor.batterij_laden_energy
+          consumption: sensor.battery_ontladen_energy
+        state_of_charge: sensor.solarflow_2400_ac_electric_level
+      individual:
+        - entity: sensor.wallbox_portal_added_energy
+          name: "Auto (Kona)"
+          icon: mdi:car-electric
+          color: "#3498db"
+          secondary_info_entity: sensor.wallbox_portal_charging_power
+
+  # ── Home verbruik excl. auto (berekend) ─────────────────────────────────
+  # Berekent per dag: thuis = netimport + zon + batterij_ontladen
+  #                          − netexport − batterij_laden − wallbox
+  # Haalt 1 jaar statistieken op; gebruik de ApexCharts toolbar om in/uit te
+  # zoomen of te scrollen. Zonneproductie is opgeslagen in Wh → gedeeld door 1000.
+  - type: custom:apexcharts-card
+    header:
+      show: true
+      title: "Thuisverbruik excl. auto (kWh)"
+    update_interval: "1h"
+    graph_span: 30d
+    apex_config:
+      chart:
+        type: bar
+        toolbar:
+          show: true
+      xaxis:
+        type: datetime
+      tooltip:
+        x:
+          format: "dd MMM yyyy"
+      yaxis:
+        title:
+          text: kWh
+    series:
+      # sensor.wallbox_portal_charging_power has regular state history so
+      # apexcharts-card's internal history fetch succeeds. data_generator
+      # then replaces the data entirely with the computed home excl. EV values.
+      - entity: sensor.wallbox_portal_charging_power
+        name: "Thuisverbruik excl. auto"
+        color: "#e74c3c"
+        type: column
+        data_generator: |
+          async (entity, hass) => {
+            const end = new Date();
+            const start = new Date();
+            start.setFullYear(start.getFullYear() - 1);
+            const stats = await hass.callWS({
+              type: 'recorder/statistics_during_period',
+              start_time: start.toISOString(),
+              end_time: end.toISOString(),
+              period: 'day',
+              statistic_ids: [
+                'sensor.electricity_meter_energieverbruik_sum',
+                'sensor.electricity_meter_energieproductie_sum',
+                'sensor.envoy_122317102934_lifetime_energy_production',
+                'sensor.batterij_laden_energy',
+                'sensor.battery_ontladen_energy',
+                'sensor.wallbox_portal_added_energy',
+              ],
+            });
+            // Convert cumulative sum to per-day delta. Use .change if the API
+            // returns it; otherwise diff consecutive .sum values.
+            const delta = (arr, scale) => {
+              const out = {};
+              for (let i = 1; i < arr.length; i++) {
+                const d = arr[i].change != null
+                  ? arr[i].change
+                  : Math.max(0, (arr[i].sum ?? 0) - (arr[i-1].sum ?? 0));
+                out[arr[i].start] = Math.max(0, d) * scale;
+              }
+              return out;
+            };
+            const gi  = delta(stats['sensor.electricity_meter_energieverbruik_sum'] || [], 1);
+            const ge  = delta(stats['sensor.electricity_meter_energieproductie_sum'] || [], 1);
+            const sol = delta(stats['sensor.envoy_122317102934_lifetime_energy_production'] || [], 0.001);
+            const bc  = delta(stats['sensor.batterij_laden_energy'] || [], 1);
+            const bd  = delta(stats['sensor.battery_ontladen_energy'] || [], 1);
+            const ev  = delta(stats['sensor.wallbox_portal_added_energy'] || [], 1);
+            const keys = [...new Set([
+              ...Object.keys(gi), ...Object.keys(ge), ...Object.keys(sol),
+              ...Object.keys(bc), ...Object.keys(bd), ...Object.keys(ev),
+            ])].sort();
+            return keys.map(t => ({
+              x: new Date(t).getTime(),
+              y: +Math.max(0,
+                (gi[t]||0) + (sol[t]||0) + (bd[t]||0)
+                - (ge[t]||0) - (bc[t]||0) - (ev[t]||0)
+              ).toFixed(2),
+            }));
+          }
+
+  # ── 30-day trend charts ──────────────────────────────────────────────────
+  # These work on any dashboard view — no energy context needed.
+  # Full history available immediately (uses existing cumulative sensors).
+
+  - type: statistics-graph
+    title: "Zonnepanelen productie (30d)"
+    entities:
+      - entity: sensor.envoy_122317102934_lifetime_energy_production
+        name: "Productie"
+    stat_types:
+      - change
+    period: day
+    chart_type: bar
+    days_to_show: 30
+
+  - type: statistics-graph
+    title: "Netverbruik & teruglevering (30d)"
+    entities:
+      - entity: sensor.electricity_meter_energieverbruik_tarief_1
+        name: "Verbruik dal"
+      - entity: sensor.electricity_meter_energieverbruik_tarief_2
+        name: "Verbruik normaal"
+      - entity: sensor.electricity_meter_energieproductie_tarief_1
+        name: "Teruglevering dal"
+      - entity: sensor.electricity_meter_energieproductie_tarief_2
+        name: "Teruglevering normaal"
+    stat_types:
+      - change
+    period: day
+    chart_type: bar
+    days_to_show: 30
+
+  - type: statistics-graph
+    title: "Batterij laden / ontladen (30d)"
+    entities:
+      - entity: sensor.solarflow_2400_ac_aggr_charge
+        name: "Laden"
+      - entity: sensor.solarflow_2400_ac_aggr_discharge
+        name: "Ontladen"
+    stat_types:
+      - change
+    period: day
+    chart_type: bar
+    days_to_show: 30
+
+  - type: statistics-graph
+    title: "Autoladen Wallbox (30d)"
+    entities:
+      - entity: sensor.wallbox_portal_added_energy
+        name: "Auto geladen"
+    stat_types:
+      - change
+    period: day
+    chart_type: bar
+    days_to_show: 30
