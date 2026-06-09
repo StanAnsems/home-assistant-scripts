@@ -39,7 +39,7 @@ triggers:
 conditions: []
 actions:
   - choose:
-      # Auto begint laden → thuisbatterij niet ontladen
+      # Auto begint laden → thuisbatterij niet ontladen + stroom instellen of pauzeren
       - conditions:
           - condition: trigger
             id: auto_begint_laden
@@ -49,6 +49,41 @@ actions:
               option: "off"
             target:
               entity_id: select.zendure_manager_operation
+          - choose:
+              # EV laag of dagreis → laden op vol vermogen
+              - conditions:
+                  - condition: or
+                    conditions:
+                      - condition: numeric_state
+                        entity_id: sensor.kona_ev_battery_level
+                        below: 40
+                      - condition: numeric_state
+                        entity_id: number.kona_ac_charging_limit
+                        above: 99
+                sequence:
+                  - action: number.set_value
+                    data:
+                      value: "32"
+                    target:
+                      entity_id: number.wallbox_portal_max_charging_current
+              # Zonne-energie hoog → laden op minimum stroom
+              - conditions:
+                  - condition: numeric_state
+                    entity_id: sensor.envoy_122317102934_current_power_production
+                    above: 1500
+                sequence:
+                  - action: number.set_value
+                    data:
+                      value: "6"
+                    target:
+                      entity_id: number.wallbox_portal_max_charging_current
+              # Geen reden om te laden → direct pauzeren
+              - conditions: []
+                sequence:
+                  - action: switch.turn_off
+                    data: {}
+                    target:
+                      entity_id: switch.wallbox_portal_pause_resume
 
       # Auto stopt laden → thuisbatterij terug naar slim laden
       - conditions:

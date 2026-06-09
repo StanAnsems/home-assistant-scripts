@@ -11,14 +11,23 @@ Setup:
 - Enphase solar panels (official integration)
 
 Requirements:
-- when solar production > 1500W, charge the car first at minimum current (6A) — car has priority over home battery
-- when the car connects and solar is already above 1500W, start charging immediately at 6A
+- when solar production > 1500W, charge the car at minimum current (6A) — car has priority over home battery
 - when the car is fully charged, home battery charges from remaining solar (smart mode)
-- when car battery is below 40% (including at the moment of connection), charge at full speed (32A)
+- when car battery is below 40%, charge at full speed (32A)
 - when the car is charging, don't discharge the home battery
 - when the car stops charging, allow home battery to resume smart mode
 - stop charging when EV battery > 50% and solar production is below 1000W (both when solar drops AND when EV crosses 50% while solar is already low)
 - dagreis modus: when AC charge limit is set to 100%, always charge at full speed (32A) and never stop based on solar
+
+## Wallbox behaviour
+
+The Wallbox goes directly from **Ready → Charging** when a car connects (never via Paused).
+The `auto_begint_laden` trigger fires immediately and decides what to do:
+- EV <40% or limit 100% → keep charging at **32A**
+- Solar >1500W → keep charging at **6A**
+- No valid reason → **pause immediately**
+
+The Wallbox only shows **Paused** when the automation has explicitly paused it. The `solar_hoog`, `auto_accu_laag` and `dagreis_modus` cases restart charging from this Paused state.
 
 Automations:
 - [Car charging unified](car-charging-unified.yml) — single automation replacing all previous files
@@ -30,10 +39,11 @@ The car is not at home on Monday, Wednesday and Thursday during daytime.
 On other days the car is always connected to the charger.
 Default AC charge limit is 80%. For a day trip the limit is manually set to 100% (dagreis modus).
 
-### Scenario 1 — Sunny Tuesday, car at home, EV 70%, limit 80%
+### Scenario 1 — Sunny Tuesday, car at home all night, EV 70%, limit 80%
 
 | Time | Trigger | Result |
 |------|---------|--------|
+| Previous evening | Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% | **Pause immediately** |
 | 09:30 | Solar crosses 1500W, Wallbox Paused | Start **6A** |
 | 09:30 | Wallbox → Charging | Home battery **off** |
 | 16:30 | Solar drops below 1000W, EV 78% >50%, limit 80% | **Pause** charging |
@@ -47,16 +57,17 @@ Car gets free solar energy. Home battery resumes smart mode and absorbs remainin
 |------|---------|--------|
 | 09:30 | Solar crosses 1500W, Wallbox **Ready** | Nothing — car not connected |
 | All day | — | Home battery charges freely in smart mode |
-| 18:30 | Car connects, EV 55%, limit 80%, solar ~300W | Nothing — no condition matches |
+| 18:30 | Car connects → auto-starts → `auto_begint_laden`: EV 55%, solar ~300W | **Pause immediately** |
+| 18:30 | Wallbox → Paused | Home battery **smart** |
 
-Car stays paused. Correct — no free solar available at 18:30.
+Car is paused right away. Correct — no free solar available at 18:30.
 
 ### Scenario 3 — Sunny Wednesday, car arrives 13:00 while solar still high, EV 55%
 
 | Time | Trigger | Result |
 |------|---------|--------|
-| 13:00 | Car connects, solar 2000W >1500W | Start **6A** |
-| 13:00 | Wallbox → Charging | Home battery **off** |
+| 13:00 | Car connects → auto-starts → `auto_begint_laden`: solar 2000W >1500W | Set **6A**, keep charging |
+| 13:00 | Wallbox stays Charging | Home battery **off** |
 | 16:30 | Solar drops below 1000W, EV ~62% >50%, limit 80% | **Pause** charging |
 | 16:30 | Wallbox → Paused | Home battery **smart** |
 
@@ -64,8 +75,8 @@ Car stays paused. Correct — no free solar available at 18:30.
 
 | Time | Trigger | Result |
 |------|---------|--------|
-| 18:30 | Car connects, EV 38% <40% | Start **32A** |
-| 18:30 | Wallbox → Charging | Home battery **off** |
+| 18:30 | Car connects → auto-starts → `auto_begint_laden`: EV 38% <40% | Set **32A**, keep charging |
+| 18:30 | Wallbox stays Charging | Home battery **off** |
 | ~20:30 | EV crosses 50%, solar already <1000W, limit 80% | **Pause** charging |
 | ~20:30 | Wallbox → Paused | Home battery **smart** |
 
@@ -73,14 +84,14 @@ Solar already dropped before the car arrived, so `solar_laag` won't re-fire when
 
 ### Scenario 5 — Cloudy day, car at home, EV 65%
 
-Solar never crosses 1500W, EV stays above 40%. No triggers fire. Car stays paused, home battery runs smart mode all day.
+Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% → **paused immediately**. Home battery stays in smart mode all day.
 
 ### Scenario 6 — Dagreis, limit set to 100% before connecting, sunny day
 
 | Time | Trigger | Result |
 |------|---------|--------|
-| 09:00 | Car connects, limit 100% | Start **32A** |
-| 09:00 | Wallbox → Charging | Home battery **off** |
+| 09:00 | Car connects → auto-starts → `auto_begint_laden`: limit 100% | Set **32A**, keep charging |
+| 09:00 | Wallbox stays Charging | Home battery **off** |
 | 16:30 | Solar drops below 1000W, limit 100% | **Keeps charging** — stop condition blocked |
 | ~18:00 | Car reaches 100% | Wallbox stops naturally |
 | ~18:00 | Wallbox → Paused | Home battery **smart** |
@@ -89,8 +100,8 @@ Solar never crosses 1500W, EV stays above 40%. No triggers fire. Car stays pause
 
 | Time | Trigger | Result |
 |------|---------|--------|
-| 18:30 | Car connects, limit 100% | Start **32A** |
-| 18:30 | Wallbox → Charging | Home battery **off** |
+| 18:30 | Car connects → auto-starts → `auto_begint_laden`: limit 100% | Set **32A**, keep charging |
+| 18:30 | Wallbox stays Charging | Home battery **off** |
 | ~03:00 | Car reaches 100% | Wallbox stops naturally |
 | ~03:00 | Wallbox → Paused | Home battery **smart** |
 
