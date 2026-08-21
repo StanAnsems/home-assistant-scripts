@@ -243,6 +243,46 @@ actions:
             target:
               entity_id: switch.wallbox_portal_pause_resume
 
+      # EV >50% + zonne-energie hoog + geen dagreis → verlagen naar minimale stroom
+      - conditions:
+          - condition: trigger
+            id: ev_accu_half_vol
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+          - condition: numeric_state
+            entity_id: sensor.envoy_122317102934_current_power_production
+            above: 1500
+          - condition: numeric_state
+            entity_id: number.kona_ac_charging_limit
+            below: 100
+        sequence:
+          - action: number.set_value
+            data:
+              value: "6"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+
+      # Zonne-energie wordt hoog terwijl EV >50% al aan het laden is → verlagen naar minimale stroom
+      - conditions:
+          - condition: trigger
+            id: solar_hoog
+          - condition: state
+            entity_id: sensor.wallbox_portal_status_description
+            state: Charging
+          - condition: numeric_state
+            entity_id: sensor.kona_ev_battery_level
+            above: 50
+          - condition: numeric_state
+            entity_id: number.kona_ac_charging_limit
+            below: 100
+        sequence:
+          - action: number.set_value
+            data:
+              value: "6"
+            target:
+              entity_id: number.wallbox_portal_max_charging_current
+
       # EV >50% + zonne-energie al laag + geen dagreis → laden pauzeren
       - conditions:
           - condition: trigger

@@ -17,6 +17,8 @@ Requirements:
 - when the car is charging, don't discharge the home battery
 - when the car stops charging, allow home battery to resume smart mode
 - stop charging when EV battery > 50% and solar production is below 1000W (both when solar drops AND when EV crosses 50% while solar is already low)
+- drop to 6A when EV battery crosses 50% and solar is still above 1500W (switch from grid-speed to solar-speed charging)
+- also drop to 6A if EV is already >50% and charging at 32A when solar later climbs above 1500W (car started low, crossed 50% before solar rose)
 - dagreis modus: when AC charge limit is set to 100%, always charge at full speed (32A) and never stop based on solar
 
 ## Wallbox behaviour
@@ -82,6 +84,16 @@ Car is paused right away. Correct — no free solar available at 18:30.
 
 Solar already dropped before the car arrived, so `solar_laag` won't re-fire when EV crosses 50%. The `ev_accu_half_vol` trigger handles this case instead.
 
+**Variant — car arrives during the day with 38% EV, solar 2000W:**
+
+| Time | Trigger | Result |
+|------|---------|--------|
+| 13:00 | Car connects, EV 38% <40% | Set **32A**, keep charging |
+| 13:00 | Wallbox stays Charging | Home battery **off** |
+| ~14:30 | EV crosses 50%, solar 2000W >1500W, limit 80% | Drop to **6A** |
+| 16:30 | Solar drops below 1000W, EV ~55% >50%, limit 80% | **Pause** charging |
+| 16:30 | Wallbox → Paused | Home battery **smart** |
+
 ### Scenario 5 — Cloudy day, car at home, EV 65%
 
 Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% → **paused immediately**. Home battery stays in smart mode all day.
@@ -119,4 +131,14 @@ Previously a gap — now handled by the `dagreis_modus` trigger.
 ### Scenario 9 — Dagreis, EV also below 40%, limit 100%
 
 Car connects with 35% EV and limit 100%. EV low case (<40%) matches first in choose order → **32A**. Both cases give 32A anyway.
+
+### Scenario 10 — Car arrives with EV <40%, crosses 50% before solar rises, then solar climbs
+
+| Time | Trigger | Result |
+|------|---------|--------|
+| 07:00 | Car connects, EV 35% <40%, no/low solar | Set **32A**, keep charging |
+| 09:00 | EV crosses 50%, solar still ~800W (<1500W) | No 6A drop yet — stays **32A** |
+| 11:00 | Solar climbs above 1500W (2300W), EV 65% >50%, limit 80%, Wallbox Charging | Drop to **6A** |
+
+Without the `solar_hoog` + `Charging` + EV>50% block, this case had no automation path — `ev_accu_half_vol` had already fired below the solar threshold, and `solar_hoog`'s other handler only resumes from Paused, not adjusts an already-Charging session.
 
