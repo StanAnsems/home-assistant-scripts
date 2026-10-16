@@ -6,16 +6,16 @@ Setup:
 - Home Assistant
 - Wallbox car charger (official integration)
 - Hyundai Kona EV car (HACS Integration `kia_uvo` + a second integration as fallback)
-- Zendure Solarflow 2400AC (HACS Integration)
+- Zendure Solarflow 2400AC, controlled by [Omnibattery](https://github.com/ffunes/omnibattery) (HACS Integration, local API)
 - P1 smart power meter (official integration)
 - Enphase solar panels (official integration)
 
 Requirements:
 - when solar production > 1500W, charge the car at minimum current (6A) — car has priority over home battery
-- when the car is fully charged, home battery charges from remaining solar (smart mode)
+- when the car is fully charged, home battery charges from remaining solar (Omnibattery automatic control)
 - when car battery is below 40%, charge at full speed (32A)
-- when the car is charging, don't discharge the home battery
-- when the car stops charging, allow home battery to resume smart mode
+- when the car is charging, don't discharge the home battery (handled by Omnibattery, see below)
+- when the car stops charging, home battery resumes automatic control (handled by Omnibattery)
 - stop charging when EV battery > 50% and solar production is below 1000W (both when solar drops AND when EV crosses 50% while solar is already low)
 - drop to 6A when EV battery crosses 50% and solar is still above 1500W (switch from grid-speed to solar-speed charging)
 - also drop to 6A if EV is already >50% and charging at 32A when solar later climbs above 1500W (car started low, crossed 50% before solar rose)
@@ -30,6 +30,29 @@ see [helpers/kona-ev-fallback-sensors.md](../../helpers/kona-ev-fallback-sensors
 
 When both integrations are invalid the battery reports 0%, so the car is treated as
 low: it charges at **32A** and is never paused by the >50% rules.
+
+## Home battery (Omnibattery)
+
+The automation does not control the home battery. Omnibattery runs its own zero-export
+controller on the P1 meter and treats the Wallbox as an **excluded device**:
+
+| Setting | Value |
+|---|---|
+| Grid consumption sensor | `sensor.p1_meter_actual_watts` (positive = import, not inverted, 1s updates) |
+| Maximum contracted power | 17250 W (3x25A) |
+| Solar production sensor | `sensor.envoy_122317102934_current_power_production` |
+| Zendure | local IP, port 80, nominal capacity 8.64 kWh (3x AB3000), HEMS disabled in Zendure app |
+| Excluded device | Wallbox, *EV charger without power telemetry* |
+| Device active / EV charging sensor | `sensor.wallbox_portal_status_description` (`Charging` = active) |
+| Included in home consumption sensor | on |
+| Solar Surplus / Cover Home / Dynamic Power Control | off |
+
+When the Wallbox reports `Charging`, Omnibattery sets the battery to 0 W and blocks discharge
+until charging ends. The Wallbox at 6A always draws more than the solar panels produce,
+so there is no surplus for the battery while the car charges. State-only mode is used
+because the Wallbox cloud power sensor lags behind.
+
+Do not run Zendure HEMS or the Zendure-HA `smart` mode at the same time — two controllers fight.
 
 ## Wallbox behaviour
 
@@ -59,20 +82,20 @@ Default AC charge limit is 80%. For a day trip the limit is manually set to 100%
 |------|---------|--------|
 | Previous evening | Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% | **Pause immediately** |
 | 09:30 | Solar crosses 1500W, Wallbox Paused | Start **6A** |
-| 09:30 | Wallbox → Charging | Home battery **off** |
+| 09:30 | Wallbox → Charging | Home battery **blocked** |
 | 16:30 | Solar drops below 1000W, EV 78% >50%, limit 80% | **Pause** charging |
-| 16:30 | Wallbox → Paused | Home battery **smart** |
+| 16:30 | Wallbox → Paused | Home battery **automatic** |
 
-Car gets free solar energy. Home battery resumes smart mode and absorbs remaining solar.
+Car gets free solar energy. Home battery resumes automatic control and absorbs remaining solar.
 
 ### Scenario 2 — Sunny Wednesday, car not home, arrives 18:30, EV 55%
 
 | Time | Trigger | Result |
 |------|---------|--------|
 | 09:30 | Solar crosses 1500W, Wallbox **Ready** | Nothing — car not connected |
-| All day | — | Home battery charges freely in smart mode |
+| All day | — | Home battery charges freely in automatic control |
 | 18:30 | Car connects → auto-starts → `auto_begint_laden`: EV 55%, solar ~300W | **Pause immediately** |
-| 18:30 | Wallbox → Paused | Home battery **smart** |
+| 18:30 | Wallbox → Paused | Home battery **automatic** |
 
 Car is paused right away. Correct — no free solar available at 18:30.
 
@@ -81,18 +104,18 @@ Car is paused right away. Correct — no free solar available at 18:30.
 | Time | Trigger | Result |
 |------|---------|--------|
 | 13:00 | Car connects → auto-starts → `auto_begint_laden`: solar 2000W >1500W | Set **6A**, keep charging |
-| 13:00 | Wallbox stays Charging | Home battery **off** |
+| 13:00 | Wallbox stays Charging | Home battery **blocked** |
 | 16:30 | Solar drops below 1000W, EV ~62% >50%, limit 80% | **Pause** charging |
-| 16:30 | Wallbox → Paused | Home battery **smart** |
+| 16:30 | Wallbox → Paused | Home battery **automatic** |
 
 ### Scenario 4 — Monday evening, car arrives 18:30 with 38% EV
 
 | Time | Trigger | Result |
 |------|---------|--------|
 | 18:30 | Car connects → auto-starts → `auto_begint_laden`: EV 38% <40% | Set **32A**, keep charging |
-| 18:30 | Wallbox stays Charging | Home battery **off** |
+| 18:30 | Wallbox stays Charging | Home battery **blocked** |
 | ~20:30 | EV crosses 50%, solar already <1000W, limit 80% | **Pause** charging |
-| ~20:30 | Wallbox → Paused | Home battery **smart** |
+| ~20:30 | Wallbox → Paused | Home battery **automatic** |
 
 Solar already dropped before the car arrived, so `solar_laag` won't re-fire when EV crosses 50%. The `ev_accu_half_vol` trigger handles this case instead.
 
@@ -101,33 +124,33 @@ Solar already dropped before the car arrived, so `solar_laag` won't re-fire when
 | Time | Trigger | Result |
 |------|---------|--------|
 | 13:00 | Car connects, EV 38% <40% | Set **32A**, keep charging |
-| 13:00 | Wallbox stays Charging | Home battery **off** |
+| 13:00 | Wallbox stays Charging | Home battery **blocked** |
 | ~14:30 | EV crosses 50%, solar 2000W >1500W, limit 80% | Drop to **6A** |
 | 16:30 | Solar drops below 1000W, EV ~55% >50%, limit 80% | **Pause** charging |
-| 16:30 | Wallbox → Paused | Home battery **smart** |
+| 16:30 | Wallbox → Paused | Home battery **automatic** |
 
 ### Scenario 5 — Cloudy day, car at home, EV 65%
 
-Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% → **paused immediately**. Home battery stays in smart mode all day.
+Car connects → auto-starts → `auto_begint_laden`: no solar, EV >40% → **paused immediately**. Home battery stays in automatic control all day.
 
 ### Scenario 6 — Dagreis, limit set to 100% before connecting, sunny day
 
 | Time | Trigger | Result |
 |------|---------|--------|
 | 09:00 | Car connects → auto-starts → `auto_begint_laden`: limit 100% | Set **32A**, keep charging |
-| 09:00 | Wallbox stays Charging | Home battery **off** |
+| 09:00 | Wallbox stays Charging | Home battery **blocked** |
 | 16:30 | Solar drops below 1000W, limit 100% | **Keeps charging** — stop condition blocked |
 | ~18:00 | Car reaches 100% | Wallbox stops naturally |
-| ~18:00 | Wallbox → Paused | Home battery **smart** |
+| ~18:00 | Wallbox → Paused | Home battery **automatic** |
 
 ### Scenario 7 — Dagreis, Wednesday/Thursday, car arrives evening, limit 100%
 
 | Time | Trigger | Result |
 |------|---------|--------|
 | 18:30 | Car connects → auto-starts → `auto_begint_laden`: limit 100% | Set **32A**, keep charging |
-| 18:30 | Wallbox stays Charging | Home battery **off** |
+| 18:30 | Wallbox stays Charging | Home battery **blocked** |
 | ~03:00 | Car reaches 100% | Wallbox stops naturally |
-| ~03:00 | Wallbox → Paused | Home battery **smart** |
+| ~03:00 | Wallbox → Paused | Home battery **automatic** |
 
 Charges overnight to 100% regardless of solar or time.
 

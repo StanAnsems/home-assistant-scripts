@@ -1,7 +1,7 @@
 alias: Auto laden - gecombineerd
 description: >-
-  Beheert laadpaal en thuisbatterij: zonne-energie laadt eerst de auto
-  (daarna thuisbatterij). Start ook bij lage EV-accu (<40%). Stopt wanneer
+  Beheert de laadpaal: zonne-energie laadt eerst de auto (thuisbatterij
+  wordt door Omnibattery geregeld en ontlaadt niet tijdens het laden). Start ook bij lage EV-accu (<40%). Stopt wanneer
   EV >50% en zonne-energie laag is. EV-accu en laadlimiet komen uit
   sensor.kona_accu_niveau / sensor.kona_laadlimiet (oude integratie, anders
   nieuwe integratie; zijn beide ongeldig dan accu 0% → altijd laden).
@@ -34,23 +34,14 @@ triggers:
     id: auto_begint_laden
     entity_id: sensor.wallbox_portal_status_description
     to: Charging
-  - trigger: state
-    id: auto_stopt_laden
-    entity_id: sensor.wallbox_portal_status_description
-    from: Charging
 conditions: []
 actions:
   - choose:
-      # Auto begint laden → thuisbatterij niet ontladen + stroom instellen of pauzeren
+      # Auto begint laden → stroom instellen of pauzeren
       - conditions:
           - condition: trigger
             id: auto_begint_laden
         sequence:
-          - action: select.select_option
-            data:
-              option: "off"
-            target:
-              entity_id: select.zendure_manager_operation
           - choose:
               # EV laag of dagreis → laden op vol vermogen
               - conditions:
@@ -86,17 +77,6 @@ actions:
                     data: {}
                     target:
                       entity_id: switch.wallbox_portal_pause_resume
-
-      # Auto stopt laden → thuisbatterij terug naar slim laden
-      - conditions:
-          - condition: trigger
-            id: auto_stopt_laden
-        sequence:
-          - action: select.select_option
-            data:
-              option: smart
-            target:
-              entity_id: select.zendure_manager_operation
 
       # Dagreis modus (laadlimiet → 100%) + auto aan het laden → verhoog naar vol vermogen
       - conditions:
