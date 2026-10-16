@@ -18,6 +18,9 @@ triggers:
     id: auto_accu_laag
     entity_id: sensor.kona_accu_niveau
     below: 40
+    # Na een HA-herstart staat de sensor kort op 0% (Kona-integraties nog niet geladen)
+    for:
+      minutes: 5
   - trigger: numeric_state
     id: dagreis_modus
     entity_id: sensor.kona_laadlimiet
