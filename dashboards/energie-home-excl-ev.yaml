@@ -33,7 +33,7 @@ cards:
         entity:
           production: sensor.batterij_laden_energy
           consumption: sensor.battery_ontladen_energy
-        state_of_charge: sensor.solarflow_2400_ac_electric_level
+        state_of_charge: sensor.zendure_solarflow_1_battery_soc
       individual:
         - entity: sensor.wallbox_portal_added_energy
           name: "Auto (Kona)"
@@ -158,9 +158,9 @@ cards:
   - type: statistics-graph
     title: "Batterij laden / ontladen (30d)"
     entities:
-      - entity: sensor.solarflow_2400_ac_aggr_charge
+      - entity: sensor.batterij_laden_energy
         name: "Laden"
-      - entity: sensor.solarflow_2400_ac_aggr_discharge
+      - entity: sensor.battery_ontladen_energy
         name: "Ontladen"
     stat_types:
       - change
