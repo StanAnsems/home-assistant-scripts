@@ -2,7 +2,9 @@ alias: Auto laden - gecombineerd
 description: >-
   Beheert laadpaal en thuisbatterij: zonne-energie laadt eerst de auto
   (daarna thuisbatterij). Start ook bij lage EV-accu (<40%). Stopt wanneer
-  EV >50% en zonne-energie laag is.
+  EV >50% en zonne-energie laag is. EV-accu en laadlimiet komen uit
+  sensor.kona_accu_niveau / sensor.kona_laadlimiet (oude integratie, anders
+  nieuwe integratie; zijn beide ongeldig dan accu 0% → altijd laden).
 triggers:
   - trigger: numeric_state
     id: solar_hoog
@@ -14,15 +16,15 @@ triggers:
     below: 1000
   - trigger: numeric_state
     id: auto_accu_laag
-    entity_id: sensor.kona_ev_battery_level
+    entity_id: sensor.kona_accu_niveau
     below: 40
   - trigger: numeric_state
     id: dagreis_modus
-    entity_id: number.kona_ac_charging_limit
+    entity_id: sensor.kona_laadlimiet
     above: 99
   - trigger: numeric_state
     id: ev_accu_half_vol
-    entity_id: sensor.kona_ev_battery_level
+    entity_id: sensor.kona_accu_niveau
     above: 50
   - trigger: state
     id: auto_aangesloten
@@ -55,10 +57,10 @@ actions:
                   - condition: or
                     conditions:
                       - condition: numeric_state
-                        entity_id: sensor.kona_ev_battery_level
+                        entity_id: sensor.kona_accu_niveau
                         below: 40
                       - condition: numeric_state
-                        entity_id: number.kona_ac_charging_limit
+                        entity_id: sensor.kona_laadlimiet
                         above: 99
                 sequence:
                   - action: number.set_value
@@ -133,7 +135,7 @@ actions:
           - condition: trigger
             id: auto_aangesloten
           - condition: numeric_state
-            entity_id: sensor.kona_ev_battery_level
+            entity_id: sensor.kona_accu_niveau
             below: 40
         sequence:
           - action: number.set_value
@@ -151,7 +153,7 @@ actions:
           - condition: trigger
             id: auto_aangesloten
           - condition: numeric_state
-            entity_id: number.kona_ac_charging_limit
+            entity_id: sensor.kona_laadlimiet
             above: 99
         sequence:
           - action: number.set_value
@@ -193,7 +195,7 @@ actions:
           - action: number.set_value
             data:
               value: >-
-                {{ 32 if states('number.kona_ac_charging_limit') | int == 100 else 6 }}
+                {{ 32 if states('sensor.kona_laadlimiet') | float(80) >= 100 else 6 }}
             target:
               entity_id: number.wallbox_portal_max_charging_current
           - action: switch.turn_on
@@ -227,10 +229,10 @@ actions:
             entity_id: sensor.wallbox_portal_status_description
             state: Charging
           - condition: numeric_state
-            entity_id: sensor.kona_ev_battery_level
+            entity_id: sensor.kona_accu_niveau
             above: 50
           - condition: numeric_state
-            entity_id: number.kona_ac_charging_limit
+            entity_id: sensor.kona_laadlimiet
             below: 100
         sequence:
           - action: number.set_value
@@ -254,7 +256,7 @@ actions:
             entity_id: sensor.envoy_122317102934_current_power_production
             above: 1500
           - condition: numeric_state
-            entity_id: number.kona_ac_charging_limit
+            entity_id: sensor.kona_laadlimiet
             below: 100
         sequence:
           - action: number.set_value
@@ -271,10 +273,10 @@ actions:
             entity_id: sensor.wallbox_portal_status_description
             state: Charging
           - condition: numeric_state
-            entity_id: sensor.kona_ev_battery_level
+            entity_id: sensor.kona_accu_niveau
             above: 50
           - condition: numeric_state
-            entity_id: number.kona_ac_charging_limit
+            entity_id: sensor.kona_laadlimiet
             below: 100
         sequence:
           - action: number.set_value
@@ -294,7 +296,7 @@ actions:
             entity_id: sensor.envoy_122317102934_current_power_production
             below: 1000
           - condition: numeric_state
-            entity_id: number.kona_ac_charging_limit
+            entity_id: sensor.kona_laadlimiet
             below: 100
         sequence:
           - action: number.set_value

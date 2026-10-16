@@ -5,7 +5,7 @@ I wanted to create some automations that will make the charging of my car, home 
 Setup:
 - Home Assistant
 - Wallbox car charger (official integration)
-- Hyundai Kona EV car (HACS Integration)
+- Hyundai Kona EV car (HACS Integration `kia_uvo` + a second integration as fallback)
 - Zendure Solarflow 2400AC (HACS Integration)
 - P1 smart power meter (official integration)
 - Enphase solar panels (official integration)
@@ -21,6 +21,16 @@ Requirements:
 - also drop to 6A if EV is already >50% and charging at 32A when solar later climbs above 1500W (car started low, crossed 50% before solar rose)
 - dagreis modus: when AC charge limit is set to 100%, always charge at full speed (32A) and never stop based on solar
 
+## EV sensors with fallback
+
+The automation does not read the Kona integration directly but two template sensors,
+see [helpers/kona-ev-fallback-sensors.md](../../helpers/kona-ev-fallback-sensors.md):
+- `sensor.kona_accu_niveau` — EV battery %: old integration → new integration → `0`
+- `sensor.kona_laadlimiet` — AC charge limit %: old integration → new integration → `80`
+
+When both integrations are invalid the battery reports 0%, so the car is treated as
+low: it charges at **32A** and is never paused by the >50% rules.
+
 ## Wallbox behaviour
 
 The Wallbox goes directly from **Ready → Charging** when a car connects (never via Paused).
@@ -34,6 +44,8 @@ The Wallbox only shows **Paused** when the automation has explicitly paused it. 
 Automations:
 - [Car charging unified](car-charging-unified.yml) — single automation replacing all previous files
 - [Kia force update](kia-force-update.yml) — force Kia UVO data refresh once at connection (06:00–21:00 only)
+
+The old separate automations are kept in [deprecated/](deprecated/) for reference only — disable them in HA, they conflict with the unified automation.
 
 ## Scenarios
 
