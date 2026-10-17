@@ -66,7 +66,7 @@ The Wallbox only shows **Paused** when the automation has explicitly paused it. 
 
 Automations:
 - [Car charging unified](car-charging-unified.yml) — single automation replacing all previous files
-- [Kia force update](kia-force-update.yml) — force Kia UVO data refresh once at connection (06:00–21:00 only)
+- [Kia force update](kia-force-update.yml) — force Kia UVO data refresh at connection and while charging when data is >15 min old (06:00–21:00 only; the 12V battery is kept charged during charging)
 
 The old separate automations are kept in [deprecated/](deprecated/) for reference only — disable them in HA, they conflict with the unified automation.
 
