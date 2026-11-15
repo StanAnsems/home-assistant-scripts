@@ -1,29 +1,36 @@
 alias: Kia update forceren bij aansluiten en laden
 description: >-
   Forceert een data-update van de Kia UVO integratie: eenmalig bij aansluiten
+  (ook 's avonds/'s nachts, zodat EV Smart Charging met een actuele SOC plant)
   en tijdens actief laden zodra de data verouderd is (>15 min, elke 10 min
-  gecontroleerd).
-  Alleen buiten het no-refresh venster (21:00-06:00).
+  gecontroleerd). De update tijdens het laden alleen buiten het no-refresh
+  venster (21:00-06:00).
 triggers:
+  # Aansluiten: de Wallbox gaat van Ready naar Charging (of Paused), nooit via Paused alleen
   - trigger: state
     id: auto_aangesloten
     entity_id: sensor.wallbox_portal_status_description
-    to: Paused
+    from: Ready
   - trigger: time_pattern
     id: elke_10_min
     minutes: "/10"
 conditions:
-  - condition: time
-    after: "06:00:00"
-    before: "21:00:00"
   - condition: or
     conditions:
-      - condition: trigger
-        id: auto_aangesloten
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: auto_aangesloten
+          - condition: template
+            value_template: >-
+              {{ trigger.to_state.state not in ['unknown', 'unavailable', 'Disconnected', 'Locked'] }}
       - condition: and
         conditions:
           - condition: trigger
             id: elke_10_min
+          - condition: time
+            after: "06:00:00"
+            before: "21:00:00"
           - condition: state
             entity_id: sensor.wallbox_portal_status_description
             state: Charging
