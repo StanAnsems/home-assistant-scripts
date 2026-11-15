@@ -1,0 +1,70 @@
+# Nord Pool prijssensor voor EV Smart Charging
+#
+# EV Smart Charging ondersteunt de officiële (core) Nord Pool-integratie niet direct.
+# Deze trigger-template haalt de kwartierprijzen op via nordpool.get_prices_for_date en
+# zet ze in het generieke formaat (prices_today / prices_tomorrow met time + price).
+#
+# Plaatsen in configuration.yaml onder `template:` (of als package). Trigger-templates
+# met actions kunnen niet via de UI worden aangemaakt.
+#
+# Bron: Nord Pool-integratie "Meterkast Nord Pool NL" (gebied NL, EUR).
+# Prijzen zijn spotprijzen in EUR/kWh, excl. belasting/opslag/btw. Voor het kiezen van de
+# goedkoopste uren maakt dat niet uit: die toeslagen zijn elk kwartier gelijk.
+template:
+  - triggers:
+      - trigger: time_pattern
+        minutes: "/15"
+      - trigger: homeassistant
+        event: start
+      - trigger: state
+        entity_id: binary_sensor.meterkast_nord_pool_nl_tomorrow_price_available
+        to: "on"
+    actions:
+      - action: nordpool.get_prices_for_date
+        data:
+          config_entry: "{{ config_entry_id('sensor.meterkast_nord_pool_nl_huidige_prijs') }}"
+          date: "{{ now().date() }}"
+          areas: NL
+          currency: EUR
+        response_variable: vandaag
+      # Morgen alleen als die prijzen er zijn; anders nogmaals vandaag ophalen, wat
+      # hieronder als "geen prijzen voor morgen" wordt herkend.
+      - action: nordpool.get_prices_for_date
+        data:
+          config_entry: "{{ config_entry_id('sensor.meterkast_nord_pool_nl_huidige_prijs') }}"
+          date: >-
+            {{ (now() + timedelta(days=1)).date()
+               if is_state('binary_sensor.meterkast_nord_pool_nl_tomorrow_price_available', 'on')
+               else now().date() }}
+          areas: NL
+          currency: EUR
+        response_variable: morgen
+    sensor:
+      - name: EV Smart Charging prijs
+        unique_id: ev_smart_charging_nordpool_prijs
+        unit_of_measurement: EUR/kWh
+        availability: "{{ vandaag is defined and vandaag['NL'] | count > 12 }}"
+        state: >-
+          {%- set ns = namespace(prijs=none) -%}
+          {%- for i in vandaag['NL'] if as_datetime(i.start) <= now() -%}
+            {%- set ns.prijs = (i.price / 1000) | round(5) -%}
+          {%- endfor -%}
+          {{ ns.prijs }}
+        attributes:
+          prices_today: >-
+            {%- set ns = namespace(l=[]) -%}
+            {%- for i in vandaag['NL'] -%}
+              {%- set ns.l = ns.l + [{'time': as_local(as_datetime(i.start)).isoformat(),
+                                      'price': (i.price / 1000) | round(5)}] -%}
+            {%- endfor -%}
+            {{ ns.l }}
+          prices_tomorrow: >-
+            {%- set ns = namespace(l=[]) -%}
+            {%- set lijst = morgen['NL'] if morgen is defined else [] -%}
+            {%- if lijst | count > 0 and as_local(as_datetime(lijst[0].start)).date() == (now() + timedelta(days=1)).date() -%}
+              {%- for i in lijst -%}
+                {%- set ns.l = ns.l + [{'time': as_local(as_datetime(i.start)).isoformat(),
+                                        'price': (i.price / 1000) | round(5)}] -%}
+              {%- endfor -%}
+            {%- endif -%}
+            {{ ns.l }}
